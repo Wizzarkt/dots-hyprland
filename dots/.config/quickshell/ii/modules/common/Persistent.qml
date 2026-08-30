@@ -58,11 +58,6 @@ Singleton {
 
             property string hyprlandInstanceSignature: ""
 
-            property JsonObject ai: JsonObject {
-                property string model: "opencode"
-                property real temperature: 0.5
-            }
-
             property JsonObject cheatsheet: JsonObject {
                 property int tabIndex: 0
             }

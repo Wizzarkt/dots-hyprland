@@ -25,7 +25,6 @@ Singleton {
             "couldn't": 'question_mark',
             'config': 'reset_wrench',
             'update': 'update',
-            'ai response': 'neurology',
             'control': 'settings',
             'upsca': 'compare',
             'music': 'queue_music',
