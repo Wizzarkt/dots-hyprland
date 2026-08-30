@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Io
 import qs.modules.common.functions as CF
 
 /**
@@ -14,6 +13,10 @@ import qs.modules.common.functions as CF
  * the request body, so this strategy reuses a single persistent opencode
  * session (stored in a file) and sends only the newest user message each time.
  * The sidebar chat UI remains the authoritative visible history.
+ *
+ * ApiStrategy is a bare QtObject (functions only), so the opencode server is
+ * started lazily from within the generated bash script rather than as a QML
+ * Process child.
  */
 ApiStrategy {
     id: root
@@ -34,15 +37,6 @@ ApiStrategy {
 
     // File that persists the opencode session id across requests
     property string sessionFile: "/tmp/quickshell/ai/opencode-session.txt"
-
-    Process {
-        id: serverProc
-        running: true
-        command: ["opencode", "serve", "--port", `${root.serverPort}`]
-        onExited: (code, status) => {
-            console.log("[AI] opencode serve exited:", code, status);
-        }
-    }
 
     function buildEndpoint(model: AiModel): string {
         return root.serverBase;
@@ -147,6 +141,22 @@ ApiStrategy {
         c += `BASE='${base}'\n`;
         c += `SESSFILE='${sessFile}'\n`;
         c += `BODY='${body}'\n`;
+        // Start the opencode server if it is not already running.
+        c += 'HW=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/global/health")\n';
+        c += 'if [ "$HW" != "200" ]; then\n';
+        c += '  mkdir -p "$(dirname "$SESSFILE")" 2>/dev/null\n';
+        c += '  nohup opencode serve --port 4100 >>/tmp/quickshell/ai/opencode-server.log 2>&1 &\n';
+        c += '  N=0\n';
+        c += '  while [ "$N" -lt 60 ]; do\n';
+        c += '    [ "$(curl -s -o /dev/null -w "%{http_code}" "$BASE/global/health" 2>/dev/null)" = "200" ] && break\n';
+        c += '    sleep 0.5; N=$((N+1))\n';
+        c += '  done\n';
+        c += 'fi\n';
+        c += 'HW=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/global/health" 2>/dev/null)\n';
+        c += 'if [ "$HW" != "200" ]; then\n';
+        c += '  echo "OC|ERR|"$(printf %s "opencode server could not be started" | jq -Rs .)\n';
+        c += '  exit 1\n';
+        c += 'fi\n';
         // Reuse existing session or create a new one.
         c += 'SID=""\n';
         c += 'if [ -f "$SESSFILE" ]; then SID=$(cat "$SESSFILE"); fi\n';
