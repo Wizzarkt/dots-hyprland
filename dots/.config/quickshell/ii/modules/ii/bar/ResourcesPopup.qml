@@ -88,6 +88,18 @@ StyledPopup {
                     label: Translation.tr("Load:")
                     value: `${Math.round(ResourceUsage.cpuUsage * 100)}%`
                 }
+                StyledPopupValueRow {
+                    icon: "thermostat"
+                    label: Translation.tr("Temp:")
+                    value: ResourceUsage.temperatureCelsius >= 0
+                        ? `${ResourceUsage.temperatureCelsius}°C` : "--"
+                }
+                StyledPopupValueRow {
+                    icon: "videogame_asset"
+                    label: Translation.tr("iGPU:")
+                    value: ResourceUsage.igpuUsage >= 0
+                        ? `${Math.round(ResourceUsage.igpuUsage * 100)}%` : "--"
+                }
             }
         }
     }
