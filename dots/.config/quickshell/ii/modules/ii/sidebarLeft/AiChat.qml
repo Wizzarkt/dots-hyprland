@@ -45,7 +45,7 @@ Item {
     property var allCommands: [
         {
             name: "attach",
-            description: Translation.tr("Attach a file. Only works with Gemini."),
+            description: Translation.tr("Attach a file. Not supported by the opencode (agent) model."),
             execute: args => {
                 Ai.attachFile(args.join(" ").trim());
             }
@@ -128,7 +128,7 @@ Item {
         },
         {
             name: "temp",
-            description: Translation.tr("Set temperature (randomness) of the model. Values range between 0 to 2 for Gemini, 0 to 1 for other models. Default is 0.5."),
+            description: Translation.tr("Set temperature (randomness) of the model. Values range between 0 to 2. Default is 0.5."),
             execute: args => {
                 // console.log(args)
                 if (args.length == 0 || args[0] == "get") {

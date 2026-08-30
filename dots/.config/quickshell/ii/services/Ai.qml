@@ -10,19 +10,17 @@ import QtQuick
 import qs.services.ai
 
 /**
- * Basic service to handle LLM chats. Supports Google's and OpenAI's API formats.
- * Supports Gemini and OpenAI models.
- * Limitations:
- * - For now functions only work with Gemini API format
+ * Basic service to handle LLM chats. Supports OpenAI and Mistral API formats,
+ * plus a local opencode agent strategy.
  */
 Singleton {
     id: root
 
     property Component aiMessageComponent: AiMessageData {}
     property Component aiModelComponent: AiModel {}
-    property Component geminiApiStrategy: GeminiApiStrategy {}
     property Component openaiApiStrategy: OpenAiApiStrategy {}
     property Component mistralApiStrategy: MistralApiStrategy {}
+    property Component openCodeApiStrategy: OpenCodeApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -78,58 +76,8 @@ Singleton {
         "{DE}": `${SystemInfo.desktopEnvironment} (${SystemInfo.windowingSystem})` 
     }
 
-    // Gemini: https://ai.google.dev/gemini-api/docs/function-calling
-    // OpenAI: https://platform.openai.com/docs/guides/function-calling
     property string currentTool: Config?.options.ai.tool ?? "search"
     property var tools: {
-        "gemini": {
-            "functions": [{"functionDeclarations": [
-                {
-                    "name": "switch_to_search_mode",
-                    "description": "Search the web",
-                },
-                {
-                    "name": "get_shell_config",
-                    "description": "Get the desktop shell config file contents",
-                },
-                {
-                    "name": "set_shell_config",
-                    "description": "Set a field in the desktop graphical shell config file. Must only be used after `get_shell_config`.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "key": {
-                                "type": "string",
-                                "description": "The key to set, e.g. `bar.borderless`. MUST NOT BE GUESSED, use `get_shell_config` to see what keys are available before setting.",
-                            },
-                            "value": {
-                                "type": "string",
-                                "description": "The value to set, e.g. `true`"
-                            }
-                        },
-                        "required": ["key", "value"]
-                    }
-                },
-                {
-                    "name": "run_shell_command",
-                    "description": "Run a shell command in bash and get its output. Use this only for quick commands that don't require user interaction. For commands that require interaction, ask the user to run manually instead.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "The bash command to run",
-                            },
-                        },
-                        "required": ["command"]
-                    }
-                },
-            ]}],
-            "search": [{
-                "google_search": {}
-            }],
-            "none": []
-        },
         "openai": {
             "functions": [
                 {
@@ -233,6 +181,13 @@ Singleton {
             ],
             "search": [],
             "none": [],
+        },
+        // opencode handles its own tools internally (it is an agent),
+        // so only "none" is available here.
+        "opencode": {
+            "functions": [],
+            "search": [],
+            "none": [],
         }
     }
     property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format])
@@ -252,34 +207,18 @@ Singleton {
     // - key_id: The identifier of the API key. Use the same identifier for models that can be accessed with the same key.
     // - key_get_link: Link to get an API key
     // - key_get_description: Description of pricing and how to get an API key
-    // - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
+    // - api_format: The API format of the model. Can be "openai", "mistral" or "opencode". Default is "openai".
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
     property var models: Config.options.policies.ai === 2 ? {} : {
-        "gemini-2.5-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 2.5 Flash",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers"),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-            "model": "gemini-2.5-flash",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free. Data used for training.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-            "api_format": "gemini",
-        }),
-        "gemini-3-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 3 Flash",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nPro-level intelligence at the speed and pricing of Flash."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:streamGenerateContent",
-            "model": "gemini-3-flash-preview",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free. Data used for training.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-            "api_format": "gemini",
+        "opencode": aiModelComponent.createObject(this, {
+            "name": "Opencode",
+            "icon": "opencode-symbolic",
+            "description": Translation.tr("Local | An autonomous coding agent powered by opencode\nRuns on your machine and manages its own tools"),
+            "homepage": "https://opencode.ai",
+            "endpoint": "http://localhost:4100",
+            "model": "",
+            "requires_key": false,
+            "api_format": "opencode",
         }),
         "mistral-medium-3": aiModelComponent.createObject(this, {
             "name": "Mistral Medium 3",
@@ -300,8 +239,8 @@ Singleton {
 
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(this),
-        "gemini": geminiApiStrategy.createObject(this),
         "mistral": mistralApiStrategy.createObject(this),
+        "opencode": openCodeApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -328,63 +267,10 @@ Singleton {
         root.addUserModels() // Config onReadyChanged above might not fire if config is loaded before this service
     }
 
-    function guessModelLogo(model) {
-        if (model.includes("llama")) return "ollama-symbolic";
-        if (model.includes("gemma")) return "google-gemini-symbolic";
-        if (model.includes("deepseek")) return "deepseek-symbolic";
-        if (/^phi\d*:/i.test(model)) return "microsoft-symbolic";
-        return "ollama-symbolic";
-    }
-
-    function guessModelName(model) {
-        const replaced = model.replace(/-/g, ' ').replace(/:/g, ' ');
-        let words = replaced.split(' ');
-        words[words.length - 1] = words[words.length - 1].replace(/(\d+)b$/, (_, num) => `${num}B`)
-        words = words.map((word) => {
-            return (word.charAt(0).toUpperCase() + word.slice(1))
-        });
-        if (words[words.length - 1] === "Latest") words.pop();
-        else words[words.length - 1] = `(${words[words.length - 1]})`; // Surround the last word with square brackets
-        const result = words.join(' ');
-        return result;
-    }
-
     function addModel(modelName, data) {
         root.models = Object.assign({}, root.models, {
             [modelName]: aiModelComponent.createObject(this, data)
         });
-    }
-
-    Process {
-        id: getOllamaModels
-        running: true
-        command: ["bash", "-c", `${Directories.scriptPath}/ai/show-installed-ollama-models.sh`.replace(/file:\/\//, "")]
-        stdout: SplitParser {
-            onRead: data => {
-                try {
-                    if (data.length === 0) return;
-                    const dataJson = JSON.parse(data);
-                    root.modelList = [...root.modelList, ...dataJson];
-                    dataJson.forEach(model => {
-                        const safeModelName = root.safeModelName(model);
-                        root.addModel(safeModelName, {
-                            "name": guessModelName(model),
-                            "icon": guessModelLogo(model),
-                            "description": Translation.tr("Local Ollama model | %1").arg(model),
-                            "homepage": `https://ollama.com/library/${model}`,
-                            "endpoint": "http://localhost:11434/v1/chat/completions",
-                            "model": model,
-                            "requires_key": false,
-                        })
-                    });
-
-                    root.modelList = Object.keys(root.models);
-
-                } catch (e) {
-                    console.log("Could not fetch Ollama models:", e);
-                }
-            }
-        }
     }
 
     Process {
