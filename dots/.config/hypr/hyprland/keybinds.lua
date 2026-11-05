@@ -14,6 +14,32 @@ hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:searchToggleRelease"))
 hl.bind("SUPER + SUPER_L", hl.dsp.exec_cmd(qsIsAlive .. " || pkill fuzzel || fuzzel"))
 hl.bind("SUPER + SUPER_R", hl.dsp.exec_cmd(qsIsAlive .. " || pkill fuzzel || fuzzel"))
 
+-- Workaround for https://github.com/end-4/dots-hyprland/issues/3728
+-- On Hyprland 0.57 the Lua config cannot bind the old
+-- `binditn = SUPER, catchall, global, quickshell:searchToggleReleaseInterrupt`.
+-- Without it, any Super+<key> combo leaves searchToggleRelease armed, so
+-- releasing Super also opens the search overlay. Cancel it ourselves as soon
+-- as another key is pressed while Super is held.
+local superKeycodes = { [133] = true, [134] = true } -- Super_L / Super_R (xkb keycodes)
+local superHeld = 0
+hl.on("input.keyboard.key", function(keycode, _, state)
+    if superKeycodes[keycode] then
+        -- state is 1 on press, 0 on release
+        superHeld = math.max(0, superHeld + (state == 1 and 1 or -1))
+        return
+    end
+    if state == 1 and superHeld > 0 then
+        hl.dispatch(hl.dsp.global("quickshell:searchToggleReleaseInterrupt"))
+    end
+end)
+
+-- Mouse buttons/wheel don't emit input.keyboard.key, so cover them with binds.
+-- Keep these before the SUPER+mouse drag/resize/scroll binds so they aren't consumed.
+for _, button in ipairs({ "mouse:272", "mouse:273", "mouse:274", "mouse_down", "mouse_up", "mouse_left", "mouse_right" }) do
+    hl.bind("SUPER + " .. button, hl.dsp.global("quickshell:searchToggleReleaseInterrupt"),
+        { non_consuming = true })
+end
+
 hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { ignore_mods = true, transparent = true })
 hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { ignore_mods = true, transparent = true })
 hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"),
